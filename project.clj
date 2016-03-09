@@ -1,6 +1,7 @@
-(defproject cloudpassage-lib "0.1.0"
+(defproject cloudpassage-lib "0.1.1-SNAPSHOT"
   :description "A library for interacting with cloudpassage apis."
   :url "http://github.com/RackSec/cloudpassage-lib"
+  :lein-release {:deploy-via :clojars}
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]

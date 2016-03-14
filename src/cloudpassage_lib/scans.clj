@@ -30,7 +30,7 @@
   ([opts]
    (scans-url base-scans-url opts))
   ([url opts]
-   (let [opts (update opts "modules" maybe-flatten-list)]
+    (let [opts (update opts "modules" maybe-flatten-list)]
      (-> (u/url url)
          (update :query merge opts)
          str))))
@@ -100,13 +100,28 @@
              (when (ms/drained? scans-stream)
                (ms/close! scans-with-details)))))]
     (ms/consume-async add-details scans-stream)
+    (ms/on-drained scans-stream #(ms/close! scans-with-details))
     scans-with-details))
+
+
+(defn report-for-module!
+  "Get recent report data for a certain client, and ilter based on module."
+  [client-id client-secret module-name]
+  ; The docs say we can use "module" as a query parameter but it does
+  ; not work for FIM or SVM, so we have to filter out those items instead.
+  (let [opts {"since" (cpc/->cp-date (-> 3 hours ago))}]
+    (->> (scans! client-id client-secret opts)
+         (ms/filter (fn [{:keys [module]}] (= module module-name)))
+         (scans-with-details! client-id client-secret)
+         ms/stream->seq)))
+
 
 (defn fim-report!
   "Get the current (recent) FIM report for a particular client."
   [client-id client-secret]
-  (let [opts {"since" (cpc/->cp-date (-> 3 hours ago))}]
-    (->> (scans! client-id client-secret opts)
-         (ms/filter (fn [{:keys [module]}] (= module "fim")))
-         (scans-with-details! client-id client-secret)
-         ms/stream->seq)))
+  (report-for-module!  client-id client-secret "fim"))
+
+(defn svm-report!
+  "Get the current (recent) SVM report for a particular client."
+  [client-id client-secret]
+  (report-for-module! client-id client-secret "svm"))

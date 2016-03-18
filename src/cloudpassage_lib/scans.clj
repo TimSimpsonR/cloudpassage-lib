@@ -12,6 +12,8 @@
    [taoensso.timbre :as timbre :refer [error info spy]]
    [clj-time.core :as t :refer [hours ago]]
    [clj-time.format :as tf]
+   [camel-snake-kebab.core :as cskc]
+   [camel-snake-kebab.extras :as cske]
    [clojure.java.io :as io]))
 
 (def ^:private base-scans-url
@@ -110,7 +112,7 @@
                  (md/chain
                   (do (info "URL=" url) (get-page! client-id client-secret url))
                   (fn [response]
-                    (if (page-response-ok? response)                      
+                    (if (page-response-ok? response)
                       (let [{:keys [pagination servers]} response
                             next-url (:next pagination)]
                         (ms/put-all! servers-stream servers)
@@ -143,7 +145,7 @@
   details (iff the details are FIM). See CloudPassage API docs for
   more illustration."
   [client-id client-secret scans-stream]
-  (map-stream scans-stream (fn [output] 
+  (map-stream scans-stream (fn [output]
                              (fn [scan]
                                (md/chain
                                 (get-page! client-id client-secret (:url scan))
@@ -158,12 +160,12 @@
 (defn scan-each-server!
   "Given a stream of servers, returns a stream of scan data for each server."
   [client-id client-secret module input]
-  (map-stream input (fn [output] 
+  (map-stream input (fn [output]
                       (fn [{:keys [id]}]
                         (md/chain
                          (scan-server client-id client-secret id module)
                          (fn [response]
-                           (if (page-response-ok? response)                
+                           (if (page-response-ok? response)
                              (ms/put! output response)
                              (error "Error getting scans for server " id))))))))
 
@@ -174,6 +176,7 @@
   ;; not work for FIM or SVM, so we have to filter out those items instead.
   (->> (list-servers! client-id client-secret)
        (scan-each-server! client-id client-secret module-name)
+       (ms/map #(cske/transform-keys cskc/->kebab-case-keyword %))
        ms/stream->seq))
 
 (defn fim-report!

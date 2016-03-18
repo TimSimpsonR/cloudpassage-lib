@@ -124,6 +124,16 @@
     (ms/consume-async shovel urls-stream)
     servers-stream))
 
+(defn map-stream
+  "Maps an input stream to an output stream with some function.
+
+  The function is expected to accept the output stream and return another
+  function that is called repeatedly for each bit of input."
+  [input f]
+  (let [output (ms/stream)]
+    (ms/connect-via input (f output) output)
+    output))
+
 (defn scans-with-details!
   "Returns a stream of historical scan results with their details.
 
@@ -133,20 +143,12 @@
   details (iff the details are FIM). See CloudPassage API docs for
   more illustration."
   [client-id client-secret scans-stream]
-  (let [scans-with-details (ms/stream 10)
-        add-details
-        (fn [scan]
-          (md/chain
-           (get-page! client-id client-secret (:url scan))
-           (fn [response]
-             (ms/put! scans-with-details (assoc scan :scan (:scan response)))
-             (when (ms/drained? scans-stream)
-               (ms/close! scans-with-details)))))]
-    (ms/consume-async add-details scans-stream)
-    ;; TODO: Figure out a way to automatically close the stream this function
-    ;;       returns without using the lower-level on-drained callback.
-    (ms/on-drained scans-stream #(ms/close! scans-with-details))
-    scans-with-details))
+  (map-stream scans-stream (fn [output] 
+                             (fn [scan]
+                               (md/chain
+                                (get-page! client-id client-secret (:url scan))
+                                (fn [response]
+                                  (ms/put! output (assoc scan :scan (:scan response)))))))))
 
 (defn scan-server
   [client-id client-secret server-id module]
@@ -156,23 +158,14 @@
 (defn scan-each-server!
   "Given a stream of servers, returns a stream of scan data for each server."
   [client-id client-secret module input]
-  (let [output (ms/stream 10)
-        fetch-server-details
-        (fn [{:keys [id]}]
-          (md/chain
-           (scan-server client-id client-secret id module)
-           (fn [response]
-             (if (page-response-ok? response)                
-               (do
-                 (ms/put! output response)
-                 (when (ms/drained? input)
-                   (ms/close! output)))
-               (error "Error getting scans for server " id)))))]
-    (ms/consume-async fetch-server-details input)
-    ;; TODO: Figure out a way to automatically close the stream this function
-    ;;       returns without using the lower-level on-drained callback.
-    (ms/on-drained input #(ms/close! output))
-    output))
+  (map-stream input (fn [output] 
+                      (fn [{:keys [id]}]
+                        (md/chain
+                         (scan-server client-id client-secret id module)
+                         (fn [response]
+                           (if (page-response-ok? response)                
+                             (ms/put! output response)
+                             (error "Error getting scans for server " id))))))))
 
 (defn ^:private report-for-module!
   "Get recent report data for a certain client, and filter based on module."

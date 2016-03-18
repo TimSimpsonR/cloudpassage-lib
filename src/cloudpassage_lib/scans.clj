@@ -14,7 +14,8 @@
    [clj-time.format :as tf]
    [camel-snake-kebab.core :as cskc]
    [camel-snake-kebab.extras :as cske]
-   [clojure.java.io :as io]))
+   [clojure.java.io :as io]
+   [clojure.string :refer [blank?]]))
 
 (def ^:private base-scans-url
   "https://api.cloudpassage.com/v1/scans/")
@@ -88,7 +89,7 @@
                     (if (page-response-ok? response)
                       (let [{:keys [pagination scans]} response
                             next-url (:next pagination)]
-                        (if (or (= "" next-url) (nil? next-url))
+                        (if (blank? next-url)
                           (do (info "no more urls to fetch")
                               (close!))
                           (ms/put! urls-stream next-url))
@@ -116,7 +117,7 @@
                       (let [{:keys [pagination servers]} response
                             next-url (:next pagination)]
                         (ms/put-all! servers-stream servers)
-                        (if (or (= "" next-url) (nil? next-url))
+                        (if (blank? next-url)
                           (do (info "end of servers pagination")
                               (close!))
                           (ms/put! urls-stream next-url)))

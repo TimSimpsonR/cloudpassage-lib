@@ -74,59 +74,6 @@
   [response]
   (not= :cloudpassage-lib.core/fetch-error response))
 
-(defn scans!
-  "Returns a stream of historical scan results matching opts."
-  [client-id client-secret opts]
-  (let [urls-stream (ms/stream 10) ;; absolutely no science here
-        scans-stream (ms/stream 20) ;; nor here
-        close! (fn []
-                 (ms/close! urls-stream)
-                 (ms/close! scans-stream))
-        shovel (fn [url]
-                 (md/chain
-                  (get-page! client-id client-secret url)
-                  (fn [response]
-                    (if (page-response-ok? response)
-                      (let [{:keys [pagination scans]} response
-                            next-url (:next pagination)]
-                        (if (blank? next-url)
-                          (do (info "no more urls to fetch")
-                              (close!))
-                          (ms/put! urls-stream next-url))
-                        (ms/put-all! scans-stream scans))
-                      (do (error "Error getting scans for url: " url)
-                          (close!)
-                          (Exception. "Error fetching scans."))))))]
-    (ms/put! urls-stream (scans-url opts))
-    (ms/consume-async shovel urls-stream)
-    scans-stream))
-
-(defn list-servers!
-  "Returns a stream of servers for the given account."
-  [client-id client-secret]
-  (let [urls-stream (ms/stream 10) ;; absolutely no science here
-        servers-stream (ms/stream 20) ;; nor here
-        close! (fn []
-                 (ms/close! urls-stream)
-                 (ms/close! servers-stream))
-        shovel (fn [url]
-                 (md/chain
-                  (do (info "URL=" url) (get-page! client-id client-secret url))
-                  (fn [response]
-                    (if (page-response-ok? response)
-                      (let [{:keys [pagination servers]} response
-                            next-url (:next pagination)]
-                        (ms/put-all! servers-stream servers)
-                        (if (blank? next-url)
-                          (do (info "end of servers pagination")
-                              (close!))
-                          (ms/put! urls-stream next-url)))
-                      (do (error "Error fetching server list for url:" url)
-                          (close!))))))]
-    (ms/put! urls-stream base-servers-url)
-    (ms/consume-async shovel urls-stream)
-    servers-stream))
-
 (defn map-stream
   "Maps an input stream to an output stream with some function.
 
@@ -136,6 +83,50 @@
   (let [output (ms/stream)]
     (ms/connect-via input (f output) output)
     output))
+
+(defn scans!
+  "Returns a stream of historical scan results matching opts."
+  [client-id client-secret opts]
+  (let [urls-stream (ms/stream 10)]
+    (ms/put! urls-stream (scans-url opts))
+    (map-stream urls-stream (fn [scans-stream]
+                              (fn [url]
+                                (md/chain
+                                 (get-page! client-id client-secret url)
+                                 (fn [response]
+                                   (if (page-response-ok? response)
+                                     (let [{:keys [pagination scans]} response
+                                           next-url (:next pagination)]
+                                       (if (blank? next-url)
+                                         (do (info "no more urls to fetch")
+                                             (ms/close! urls-stream))
+                                         (ms/put! urls-stream next-url))
+                                       (ms/put-all! scans-stream scans))
+                                     (do (error "Error getting scans for url: " url)
+                                         (ms/close! urls-stream)
+                                         (Exception. "Error fetching scans."))))))))))
+
+(defn list-servers!
+  "Returns a stream of servers for the given account."
+  [client-id client-secret]
+  (let [urls-stream (ms/stream 10)]
+    (ms/put! urls-stream base-servers-url)
+    (map-stream urls-stream (fn [servers-stream]
+                              (fn [url]
+                                (md/chain
+                                 (do (info "URL=" url) (get-page! client-id client-secret url))
+                                 (fn [response]
+                                   (if (page-response-ok? response)
+                                     (let [{:keys [pagination servers]} response
+                                           next-url (:next pagination)]
+                                       (if (blank? next-url)
+                                         (do (info "end of servers pagination")
+                                             (ms/close! urls-stream))
+                                         (ms/put! urls-stream next-url))
+                                       (ms/put-all! servers-stream servers))
+                                     (do (error "Error fetching server list for url:" url)
+                                         (ms/close! urls-stream)
+                                         (Exception. "Error fetching servers."))))))))))
 
 (defn scans-with-details!
   "Returns a stream of historical scan results with their details.

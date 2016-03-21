@@ -56,8 +56,8 @@
     1 "svm"    ;; software version management
     2 "ccm"))  ;; configuration change management
 
-(def ^:private fake-pages 10)
-(def ^:private scans-per-page 10)
+(def ^:private fake-pages 3)
+(def ^:private scans-per-page 5)
 (def ^:private details-query-url
   (#'scans/scans-url {"details" "true"}))
 
@@ -98,7 +98,7 @@
         page-num (-> query
                      (get "next" "0")
                      Integer/parseInt)
-        next-page (if (< page-num fake-pages)
+        next-page (if (< page-num (- fake-pages 1))
                     (str (assoc-in parsed-url [:query "next"] (inc page-num)))
                     "")]
     (when-some [since (query "since")]

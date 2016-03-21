@@ -70,11 +70,11 @@
   (let [token (cpc/fetch-token! client-id client-secret (:fernet-key env))]
     (cpc/get-single-events-page! token url)))
 
-(defn page-response-ok?
+(defn ^:private page-response-ok?
   [response]
   (not= :cloudpassage-lib.core/fetch-error response))
 
-(defn map-stream
+(defn ^:private map-stream
   "Maps an input stream to an output stream with some function.
 
   The function is expected to accept the output stream and return another
@@ -84,7 +84,7 @@
     (ms/connect-via input (f output) output)
     output))
 
-(defn paginated-list!
+(defn ^:private stream-paginated-resources!
   "Returns a stream of resources coming from a paginated list."
   [client-id client-secret initial-url resource-key]
   (let [urls-stream (ms/stream 10)]
@@ -112,12 +112,12 @@
 (defn scans!
   "Returns a stream of historical scan results matching opts."
   [client-id client-secret opts]
-  (paginated-list! client-id client-secret (scans-url opts) :scans))
+  (stream-paginated-resources! client-id client-secret (scans-url opts) :scans))
 
 (defn list-servers!
   "Returns a stream of servers for the given account."
   [client-id client-secret]
-  (paginated-list! client-id client-secret base-servers-url :servers))
+  (stream-paginated-resources! client-id client-secret base-servers-url :servers))
 
 (defn scans-with-details!
   "Returns a stream of historical scan results with their details.

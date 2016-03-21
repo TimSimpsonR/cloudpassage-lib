@@ -134,7 +134,7 @@
                   :url details-query-url})
                scans))
         (is (ms/closed? scans-stream)))))
-  (testing "Error occurs fetching page."
+  (testing "If an error occurs an empty result is returned."
     ;;TODO: Replacing the error thing to detect it was logged might be helpful.
     (with-redefs [scans/get-page! fake-get-page-with-bad-response!]
       (let [scans-stream (scans/scans! "lvh" "hunter2" {"modules" "fim"})
@@ -195,13 +195,13 @@
                           {:servers [{:id "server-id-3"}]})))))
 
 (deftest list-servers!-tests
-  (testing "Make sure the server call returns some servers."
+  (testing "Returns all servers if paginated call is OK."
     (with-redefs [scans/get-page! (fake-servers-page false)]
       (let [server-stream (scans/list-servers! "lvh" "hunter2")
             id-list (map :id (ms/stream->seq server-stream))]
         (is (= ["server-id-1" "server-id-2" "server-id-3"] id-list))
         (is (ms/closed? server-stream)))))
-  (testing "Make sure we catch a bad response on page 2."
+  (testing "If page 2 is bad, a partial list is returned."
     (with-redefs [scans/get-page! (fake-servers-page true)]
       (let [server-stream (scans/list-servers! "lvh" "hunter2")
             id-list (map :id (ms/stream->seq server-stream))]

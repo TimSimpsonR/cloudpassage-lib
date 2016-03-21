@@ -209,10 +209,11 @@
         (is (ms/closed? server-stream))))))
 
 (deftest scan-server-tests
-  (with-redefs [scans/get-page! (make-fake-page
-                                 (fn [{:keys [path]}]
-                                   (is (= "/v1/servers/server-id-here/svm" path))
-                                   "GOOD"))]
+  (with-redefs
+   [scans/get-page! (make-fake-page
+                     (fn [{:keys [path]}]
+                       (is (= "/v1/servers/server-id-here/svm" path))
+                       "GOOD"))]
     (is (= "GOOD" (scans/scan-server "lvh" "hunter2" "server-id-here" "svm")))))
 
 (deftest scan-each-server!-tests
@@ -252,23 +253,27 @@
         (ms/put! input {:id "server-2"})
         (ms/put! input {:id "server-3"})
         (ms/close! input)
-        (let [scan-stream (scans/scan-each-server! "lvh" "hunter2" "svm"
-                                                   input)
-              scan-result (clojure.string/join "..." (ms/stream->seq scan-stream))]
+        (let [scan-stream
+              (scans/scan-each-server! "lvh" "hunter2" "svm"
+                                       input)
+              scan-result
+              (clojure.string/join "..." (ms/stream->seq scan-stream))]
           (is (= "ONE...TWO...THREE!" scan-result)))))))
 
 (defn ^:private test-report
   [report-fn! expected-module]
-  (with-redefs [scans/get-page! (make-fake-page
-                                 (fn [{:keys [path]}]
-                                   (case path
-                                     "/v1/servers" {:servers [{:id "server-id-1"} {:id "server-id-2"}]}
-                                     "/v1/servers/server-id-1/fim" {:id "1" :scan {}}
-                                     "/v1/servers/server-id-2/fim" {:id "2" :scan {}}
-                                     "/v1/servers/server-id-1/svm" {:id "1" :scan {}}
-                                     "/v1/servers/server-id-2/svm" {:id "2" :scan {}}
-                                     "/v1/servers/server-id-1/sca" {:id "1" :scan {}}
-                                     "/v1/servers/server-id-2/sca" {:id "2" :scan {}})))]
+  (with-redefs
+   [scans/get-page!
+    (make-fake-page
+     (fn [{:keys [path]}]
+       (case path
+         "/v1/servers" {:servers [{:id "server-id-1"} {:id "server-id-2"}]}
+         "/v1/servers/server-id-1/fim" {:id "1" :scan {}}
+         "/v1/servers/server-id-2/fim" {:id "2" :scan {}}
+         "/v1/servers/server-id-1/svm" {:id "1" :scan {}}
+         "/v1/servers/server-id-2/svm" {:id "2" :scan {}}
+         "/v1/servers/server-id-1/sca" {:id "1" :scan {}}
+         "/v1/servers/server-id-2/sca" {:id "2" :scan {}})))]
     (let [report (report-fn! "lvh" "hunter2")
           result (clojure.string/join "..." report)]
       (is (= (str {:id "1", :scan {}} "..." {:id "2", :scan {}})

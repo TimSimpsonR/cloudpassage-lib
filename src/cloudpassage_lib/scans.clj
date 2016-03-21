@@ -89,44 +89,48 @@
   [client-id client-secret opts]
   (let [urls-stream (ms/stream 10)]
     (ms/put! urls-stream (scans-url opts))
-    (map-stream urls-stream (fn [scans-stream]
-                              (fn [url]
-                                (md/chain
-                                 (get-page! client-id client-secret url)
-                                 (fn [response]
-                                   (if (page-response-ok? response)
-                                     (let [{:keys [pagination scans]} response
-                                           next-url (:next pagination)]
-                                       (if (blank? next-url)
-                                         (do (info "no more urls to fetch")
-                                             (ms/close! urls-stream))
-                                         (ms/put! urls-stream next-url))
-                                       (ms/put-all! scans-stream scans))
-                                     (do (error "Error getting scans for url: " url)
-                                         (ms/close! urls-stream)
-                                         (Exception. "Error fetching scans."))))))))))
+    (map-stream
+     urls-stream
+     (fn [scans-stream]
+       (fn [url]
+         (md/chain
+          (get-page! client-id client-secret url)
+          (fn [response]
+            (if (page-response-ok? response)
+              (let [{:keys [pagination scans]} response
+                    next-url (:next pagination)]
+                (if (blank? next-url)
+                  (do (info "no more urls to fetch")
+                      (ms/close! urls-stream))
+                  (ms/put! urls-stream next-url))
+                (ms/put-all! scans-stream scans))
+              (do (error "Error getting scans for url: " url)
+                  (ms/close! urls-stream)
+                  (Exception. "Error fetching scans."))))))))))
 
 (defn list-servers!
   "Returns a stream of servers for the given account."
   [client-id client-secret]
   (let [urls-stream (ms/stream 10)]
     (ms/put! urls-stream base-servers-url)
-    (map-stream urls-stream (fn [servers-stream]
-                              (fn [url]
-                                (md/chain
-                                 (do (info "URL=" url) (get-page! client-id client-secret url))
-                                 (fn [response]
-                                   (if (page-response-ok? response)
-                                     (let [{:keys [pagination servers]} response
-                                           next-url (:next pagination)]
-                                       (if (blank? next-url)
-                                         (do (info "end of servers pagination")
-                                             (ms/close! urls-stream))
-                                         (ms/put! urls-stream next-url))
-                                       (ms/put-all! servers-stream servers))
-                                     (do (error "Error fetching server list for url:" url)
-                                         (ms/close! urls-stream)
-                                         (Exception. "Error fetching servers."))))))))))
+    (map-stream
+     urls-stream
+     (fn [servers-stream]
+       (fn [url]
+         (md/chain
+          (get-page! client-id client-secret url)
+          (fn [response]
+            (if (page-response-ok? response)
+              (let [{:keys [pagination servers]} response
+                    next-url (:next pagination)]
+                (if (blank? next-url)
+                  (do (info "end of servers pagination")
+                      (ms/close! urls-stream))
+                  (ms/put! urls-stream next-url))
+                (ms/put-all! servers-stream servers))
+              (do (error "Error fetching server list for url:" url)
+                  (ms/close! urls-stream)
+                  (Exception. "Error fetching servers."))))))))))
 
 (defn scans-with-details!
   "Returns a stream of historical scan results with their details.
@@ -137,12 +141,14 @@
   details (iff the details are FIM). See CloudPassage API docs for
   more illustration."
   [client-id client-secret scans-stream]
-  (map-stream scans-stream (fn [output]
-                             (fn [scan]
-                               (md/chain
-                                (get-page! client-id client-secret (:url scan))
-                                (fn [response]
-                                  (ms/put! output (assoc scan :scan (:scan response)))))))))
+  (map-stream
+   scans-stream
+   (fn [output]
+     (fn [scan]
+       (md/chain
+        (get-page! client-id client-secret (:url scan))
+        (fn [response]
+          (ms/put! output (assoc scan :scan (:scan response)))))))))
 
 (defn scan-server
   [client-id client-secret server-id module]
@@ -152,14 +158,16 @@
 (defn scan-each-server!
   "Given a stream of servers, returns a stream of scan data for each server."
   [client-id client-secret module input]
-  (map-stream input (fn [output]
-                      (fn [{:keys [id]}]
-                        (md/chain
-                         (scan-server client-id client-secret id module)
-                         (fn [response]
-                           (if (page-response-ok? response)
-                             (ms/put! output response)
-                             (error "Error getting scans for server " id))))))))
+  (map-stream
+   input
+   (fn [output]
+     (fn [{:keys [id]}]
+       (md/chain
+        (scan-server client-id client-secret id module)
+        (fn [response]
+          (if (page-response-ok? response)
+            (ms/put! output response)
+            (error "Error getting scans for server " id))))))))
 
 (defn ^:private report-for-module!
   "Get recent report data for a certain client, and filter based on module."
